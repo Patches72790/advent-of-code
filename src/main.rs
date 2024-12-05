@@ -9,5 +9,6 @@ fn main() {
     //list_similarity();
 
     // day2
-    println!("Safe reports: {}", find_safe_reports());
+    println!("Safe reports: {}", find_safe_reports(false));
+    println!("Safe reports (dampening of 1): {}", find_safe_reports(true));
 }
