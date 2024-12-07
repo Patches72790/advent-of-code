@@ -19,7 +19,7 @@ fn get_sorted_list_pair() -> (Vec<usize>, Vec<usize>) {
     first.sort();
     second.sort();
 
-    return (first, second);
+    (first, second)
 }
 
 pub fn list_diff() {
@@ -42,7 +42,7 @@ pub fn list_similarity() {
         .map(|a| {
             let count = second.iter().filter(|n| *n == a).count();
 
-            return a * count;
+            a * count
         })
         .sum();
 
