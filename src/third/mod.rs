@@ -7,42 +7,12 @@ fn process_input() -> String {
     read_to_string("inputs/third/input.txt").expect("Error getting input")
 }
 
-trait Operator<T> {
-    fn execute(&self) -> Option<T>;
+#[derive(Debug, Clone, Copy)]
+enum Op {
+    Mult(i32, i32),
+    Do,
+    Dont,
 }
-
-#[derive(Debug)]
-struct MultOp {
-    num1: i32,
-    num2: i32,
-}
-
-impl MultOp {
-    fn mult(&self) -> i32 {
-        self.num1 * self.num2
-    }
-}
-impl Operator<i32> for MultOp {
-    fn execute(&self) -> Option<i32> {
-        Some(self.mult())
-    }
-}
-impl Operator<()> for DoOp {
-    fn execute(&self) -> Option<()> {
-        Some(())
-    }
-}
-impl Operator<()> for DontOp {
-    fn execute(&self) -> Option<()> {
-        Some(())
-    }
-}
-
-#[derive(Debug)]
-struct DoOp;
-
-#[derive(Debug)]
-struct DontOp;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum TokenType {
@@ -123,16 +93,13 @@ fn scan() -> Vec<TokenType> {
     tokens
 }
 
-struct Parser<T> {
+struct Parser {
     token_idx: usize,
     tokens: Vec<TokenType>,
-    ops: Vec<Box<dyn Operator<T>>>,
+    ops: Vec<Op>,
 }
 
-impl<T> Parser<T>
-where
-    T: Sized,
-{
+impl Parser {
     fn new(tokens: Vec<TokenType>) -> Self {
         Self {
             token_idx: 0,
@@ -143,6 +110,10 @@ where
 
     fn previous(&self) -> &TokenType {
         &self.tokens[self.token_idx - 1]
+    }
+
+    fn peek(&self) -> &TokenType {
+        &self.tokens[self.token_idx]
     }
 
     fn at_end(&self) -> bool {
@@ -157,25 +128,40 @@ where
         self.previous()
     }
 
-    fn peek(&self) -> &TokenType {
-        &self.tokens[self.token_idx]
-    }
-
     fn match_token(&mut self, token: &TokenType) -> bool {
-        std::mem::discriminant(self.advance()) == std::mem::discriminant(token)
+        if self.check_current(token) {
+            self.advance();
+            true
+        } else {
+            false
+        }
     }
 
-    fn check_token(&self, token: &TokenType) -> bool {
-        std::mem::discriminant(self.peek()) == std::mem::discriminant(token)
+    fn check_current(&mut self, token: &TokenType) -> bool {
+        if !self.at_end() {
+            std::mem::discriminant(self.peek()) == std::mem::discriminant(token)
+        } else {
+            false
+        }
     }
 
     fn mult(&mut self) {
+        let mut matched = false;
         if self.match_token(&TokenType::Mult) && self.match_token(&TokenType::LeftParen) {
+            matched = true;
             self.binary();
-        } else if self.match_token(&TokenType::Do) {
-            //self.emit_do();
-        } else if self.match_token(&TokenType::Dont) {
-            //self.emit_dont();
+        }
+        if self.match_token(&TokenType::Do) {
+            matched = true;
+            self.emit_op(Op::Do);
+        }
+        if self.match_token(&TokenType::Dont) {
+            matched = true;
+            self.emit_op(Op::Dont);
+        }
+
+        if !matched {
+            self.advance();
         }
     }
 
@@ -201,7 +187,7 @@ where
 
         if let Some(num1) = num1 {
             if let Some(num2) = num2 {
-                self.emit_op(num1, num2);
+                self.emit_op(Op::Mult(num1, num2));
             }
         }
     }
@@ -213,12 +199,11 @@ where
         }
     }
 
-    fn emit_op(&mut self, num1: i32, num2: i32) {
-        let op = MultOp { num1, num2 };
-        self.ops.push(Box::new(op));
+    fn emit_op(&mut self, op: Op) {
+        self.ops.push(op);
     }
 
-    fn parse(tokens: &[TokenType]) -> Vec<Box<dyn Operator<T>>> {
+    fn parse(tokens: &[TokenType]) -> Vec<Op> {
         let mut parser = Parser::new(tokens.to_vec());
 
         while !parser.at_end() {
@@ -229,21 +214,49 @@ where
     }
 }
 
-struct VM<T> {
+struct VM {
     can_execute: bool,
-    ops: Vec<Box<dyn Operator<T>>>,
+    ops: Vec<Op>,
 }
 
-impl<T> VM<T> {
-    fn new() -> Self {
+impl VM {
+    fn new(ops: Vec<Op>) -> Self {
         Self {
             can_execute: true,
-            ops: vec![],
+            ops,
         }
     }
 
-    fn evaluate(&self) {
-        for op in &self.ops {}
+    fn evaluate(&mut self) -> i32 {
+        let mut sum = 0;
+        for op in &self.ops {
+            let out = match op {
+                Op::Mult(num1, num2) => {
+                    if true {
+                        println!("Exec: Mult({num1},{num2})");
+                        Some(num1 * num2)
+                    } else {
+                        None
+                    }
+                }
+                Op::Do => {
+                    self.can_execute = true;
+                    println!("Exec: Do");
+                    None
+                }
+                Op::Dont => {
+                    self.can_execute = false;
+                    println!("Exec: Dont");
+                    None
+                }
+            };
+
+            if let Some(num) = out {
+                sum += num;
+            }
+        }
+
+        sum
     }
 }
 
@@ -253,4 +266,19 @@ pub fn find_sum() {
     let ops = Parser::parse(&tokens);
 
     println!("Num ops: {}", ops.len());
+
+    let mut vm = VM::new(ops.clone());
+
+    let sum = vm.evaluate();
+
+    println!("Sum: {sum}");
+
+    let (mults, rest): (Vec<Op>, Vec<Op>) =
+        ops.iter().partition(|op| matches!(**op, Op::Mult(_, _)));
+
+    let (dos, donts): (Vec<Op>, Vec<Op>) = rest.iter().partition(|op| matches!(**op, Op::Do));
+
+    println!("({}) : {:?}", mults.len(), mults);
+    println!("({}) : {:?}", dos.len(), dos);
+    println!("({}) : {:?}", donts.len(), donts);
 }
